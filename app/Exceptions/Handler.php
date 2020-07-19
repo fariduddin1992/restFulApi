@@ -2,11 +2,17 @@
 
 namespace App\Exceptions;
 
+use App\Traits\ApiResponser;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Throwable;
 
 class Handler extends ExceptionHandler
 {
+
+    use ApiResponser;
     /**
      * A list of the exception types that are not reported.
      *
@@ -50,6 +56,29 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Throwable $exception)
     {
+        if ($exception instanceof ValidationException) {
+            return $this->convertValidationExceptionToResponse($exception, $request);
+        }
+        if ($exception instanceof ModelNotFoundException) {
+
+            $modelName = class_basename($exception->getModel());
+            return $this->errorResponse("Does not exist any {$modelName} with the specified identifier", 404);
+        }
+        if ($exception instanceof AuthenticationException) {
+
+            return $this->unauthenticated($request, $exception);
+        }
         return parent::render($request, $exception);
+    }
+
+    protected function convertValidationExceptionToResponse(ValidationException $e, $request)
+    {
+
+        $errors = $e->validator->errors()->getMessageBag();
+        return $this->errorResponse($errors, 422);
+    }
+    protected function unauthenticated($request, AuthenticationException $exception)
+    {
+        return $this->errorResponse('Unauthenticated', 401);
     }
 }
