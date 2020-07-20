@@ -3,10 +3,15 @@
 namespace App\Exceptions;
 
 use App\Traits\ApiResponser;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -68,7 +73,30 @@ class Handler extends ExceptionHandler
 
             return $this->unauthenticated($request, $exception);
         }
-        return parent::render($request, $exception);
+        if ($exception instanceof AuthorizationException) {
+
+            return $this->errorResponse($exception->getMessage(), 403);
+        }
+        if ($exception instanceof NotFoundHttpException) {
+            return $this->errorResponse('The specified URl can not be found', 404);
+        }
+        if ($exception instanceof MethodNotAllowedHttpException) {
+            return $this->errorResponse('The specified Method for the request can not be found', 405);
+        }
+        if ($exception instanceof HttpException) {
+            return $this->errorResponse($exception->getMessage(), $exception->getStatusCode());
+        }
+        if ($exception instanceof QueryException) {
+            $errorCode = $exception->errorInfo[1];
+            if ($errorCode == 1451) {
+                return $this->errorResponse('Cannot remove this resource permanently.It is related to other resource', 409);
+            }
+        }
+
+        if (config('app.debug')) {
+            return parent::render($request, $exception);
+        }
+        return $this->errorResponse('Unexpected Exception.Try later', 500);
     }
 
     protected function convertValidationExceptionToResponse(ValidationException $e, $request)
